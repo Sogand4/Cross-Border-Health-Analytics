@@ -19,6 +19,7 @@ PIPEDA Principle 4.3.2 – “Knowledge and consent are required for the collect
 |----------|------------------|----------------------|
 | Require explicit consent toggle in the mobile app before first `/batch-upload`. | Mobile App → API Gateway | User must actively grant consent before data collection. Cognito user pool attribute `consent_granted=true` is embedded in the JWT. |
 | Deny uploads without valid consent. | Lambda (Authorizer + Validator) | Lambda checks JWT claim `consent=True`; rejects with HTTP 403 if missing. CloudWatch metric `ConsentDeniedCount` raised for compliance audit and alerting. |
+Disable background sync unless user explicitly re-enables it after giving consent. | Mobile App | Prevents passive or “proxy-like” uploads when the user assumes their data stays local. Users must opt in again if they revoke or change consent.
 
 ---
 
