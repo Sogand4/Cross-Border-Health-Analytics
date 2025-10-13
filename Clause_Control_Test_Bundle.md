@@ -34,6 +34,11 @@ Fails initially because uploads without consent are still accepted by the API Ga
 **Plan to flip to green:**  
 Enable the Lambda Authorizer check for `consent=True` in JWTs and verify CloudWatch metric `ConsentDeniedCount` increments correctly. Re-run pytest to confirm uploads without consent return HTTP 403.
 
+**Ethics Ledger Entry:**  
+Protects: Canadian users providing symptom data.  
+Harm mitigated: Unauthorized health data collection without explicit consent.  
+Linked ledger row: “Collect health data only with explicit consent” (PIPEDA 4.3.2).
+
 ---
 
 ### (Brazil) Clause 2: Data Subject Deletion Rights 
@@ -66,6 +71,11 @@ Fails initially because deletion requests may not remove *all* personal data. Fo
 
 **Plan to flip to green:**  
 Implement Lambda-triggered deletion propagation across all regional S3 buckets and activate lifecycle policies for permanent removal. Confirm that `DeletionRequestLog` entries appear in the audit bucket and re-run pytest until no residual data is detected.
+
+**Ethics Ledger Entry:**  
+Protects: Brazilian users and any user withdrawing consent.  
+Harm mitigated: Retention of personal data beyond user deletion request period.  
+Linked ledger row: “Allow data subjects to request deletion” (LGPD Art. 18 VI).
 
 ---
 
@@ -115,5 +125,10 @@ Fails initially because privacy-protective defaults are not enforced (e.g., back
 
 **Plan to flip to green:**  
 Set background sync to `False` by default, enforce region-matched S3 routing, and block exports without explicit re-consent. Re-run pytest to confirm all assertions pass.
+
+**Ethics Ledger Entry:**  
+Protects: EU residents and cross-region users.  
+Harm mitigated: Accidental cross-border data exposure or automatic uploads without user action.  
+Linked ledger row: “Apply privacy by design & default” (GDPR Art. 25).
 
 ---
