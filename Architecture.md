@@ -45,7 +45,7 @@ Design Choice Explanations:
 | **Integration Type** | Native support for Lambda, Step Functions, and HTTP backends | Broader but heavier feature set | HTTP API fits the lightweight serverless pipeline. |
 | **Security** | TLS 1.2+, Cognito JWT, IAM, custom Lambda authorizers | Adds WAF, API keys, resource policies | Our use case needs HTTPS + JWT only; extra REST security is unnecessary overhead. |
 | **Caching / Transformation** | No caching (not needed for ingestion) | Optional caching & request mapping | Each upload is unique → caching provides no benefit. |
-| **Automatic Deployments** | ✅ Supported | ❌ Manual | Simplifies CI/CD for API updates. |
+| **Automatic Deployments** | Supported | Manual | Simplifies CI/CD for API updates. |
 | **Monitoring & Logs** | CloudWatch metrics and access logs | Same, plus execution logs | Core monitoring features identical for ingestion workloads. |
 | **Operational Complexity** | Low — fewer configuration layers | High — resources, stages, mappings | Easier to maintain for a single `/batch-upload` endpoint. |
 
@@ -152,6 +152,8 @@ Data Model
 - **Compression:** Parquet reduces storage and query cost by ≈ 80–90 %.  
 - **Regional Separation:** Ensures compliance with PIPEDA, GDPR, and LGPD while supporting localized analytics.
 
+[Note: Each region also includes a small `symptom-audit-{region}` bucket for CloudWatch export and compliance logs. Expected cost < $1/month per region]
+
 ### **Estimated Monthly Total ≈ $370.16 USD**
 **Reference:** [AWS S3 Pricing](https://aws.amazon.com/s3/pricing/)
 
@@ -246,7 +248,7 @@ Example: 1 Author + 2 Readers = ≈ $30 / month total.
 
 ---
 
-## ⚖️ Key Trade-offs Summary
+## Key Trade-offs Summary
 
 | Decision | Why | Stakeholder Impact |
 |-----------|-----|--------------------|

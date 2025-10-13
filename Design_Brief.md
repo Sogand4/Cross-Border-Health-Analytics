@@ -13,3 +13,4 @@ Data will be ingested at 00:00 local time every day, due by 06:00.
 * p95 < 2.5 hours, even for retries
 * Cost < $16/daily run, for a total of $500/month
 * There are no strict regulatory deadlines
+* Deletion job triggered by Lambda must complete within 7 days (p95 target), monitored via CloudWatch
