@@ -1,3 +1,4 @@
+## Jurisdiction Bundle: Option A → Canada (PIPEDA) + Brazil (LGPD) + EU (GDPR)
 
 ### (Canada) Clause 1: Consent and Purpose Limitation
 
@@ -26,6 +27,13 @@ def test_upload_without_consent_rejected():
         "Consent control failure: API accepted upload without user consent."
 
 ```
+
+**Red-bar status:**  
+Fails initially because uploads without consent are still accepted by the API Gateway. This exposes personal health data without user permission.
+
+**Plan to flip to green:**  
+Enable the Lambda Authorizer check for `consent=True` in JWTs and verify CloudWatch metric `ConsentDeniedCount` increments correctly. Re-run pytest to confirm uploads without consent return HTTP 403.
+
 ---
 
 ### (Brazil) Clause 2: Data Subject Deletion Rights 
@@ -51,6 +59,14 @@ def test_deletion_request_removes_user_data():
     assert not data_exists("user123"), \
         "Deletion control failure: user data still present after 7 days."
 ```
+
+**Red-bar status:**  
+Fails initially because deletion requests may not remove *all* personal data. For example, only raw user data might be deleted but aggregated copies within the same region remain, or deletion events may not yet propagate across all regional buckets. This results in stale personal data remaining in storage.
+
+
+**Plan to flip to green:**  
+Implement Lambda-triggered deletion propagation across all regional S3 buckets and activate lifecycle policies for permanent removal. Confirm that `DeletionRequestLog` entries appear in the audit bucket and re-run pytest until no residual data is detected.
+
 ---
 
 ### (EU) Clause 3: Data Protection by Design and by Default  
@@ -93,3 +109,11 @@ def test_privacy_by_design_defaults():
     assert response.status_code == 403, \
         "Export allowed without explicit re-consent — violates GDPR Art.25 safeguard."
 ```
+
+**Red-bar status:**  
+Fails initially because privacy-protective defaults are not enforced (e.g., background sync on by default or data stored outside approved regions). This could lead to cross-border data exposure, violating GDPR Art. 25.
+
+**Plan to flip to green:**  
+Set background sync to `False` by default, enforce region-matched S3 routing, and block exports without explicit re-consent. Re-run pytest to confirm all assertions pass.
+
+---
