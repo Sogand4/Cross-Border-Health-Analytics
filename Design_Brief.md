@@ -28,3 +28,9 @@ Data will be ingested at 00:00 local time every day, due by 06:00.
 - **Automatic retry limit:** 3 attempts for transient Lambda or Glue failures.  
 - **Fail-fast rule:** jobs exceeding 3 retries abort and raise an alert to operations.  
 - SLA breaches (runtime, cost, or retention) are logged to the **Ethics Debt Ledger** and reviewed weekly.
+
+**Regulatory Deadlines**
+- **Canada (PIPEDA):** Deletion or consent withdrawal requests are processed within 7 days, based on our internal SLA target that interprets PIPEDA’s requirement to act “promptly.” This ensures user requests are handled in a timely and measurable way, even though the regulation does not define an exact deadline.
+- **EU (GDPR Art. 12–17):** Data-subject requests (access, deletion, correction) completed within **30 days**; monitored through CloudWatch deletion metrics.  
+- **Brazil (LGPD Art. 18):** Data-subject deletion requests honored within **7 days**, logged to `DeletionRequestLog` for audit.  
+- All regions: nightly aggregation jobs must complete **before 06:00 local time** to ensure regulators could audit fresh, up-to-date datasets on request.
