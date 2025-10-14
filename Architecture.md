@@ -1,25 +1,4 @@
-[ TODO: TEMP FILE. needs refactoring to be fit into design spec ]
-
-[Mobile App]
-
-
-[API Gateway]
-
-
-[AWS Lambda Router]
-
-
-[S3 Buckets (CA/EU/BR, Raw → Aggregated)]
-
-
-[AWS Glue Job (Nightly Transform)]
-
-
-[S3 Aggregated Zone]
-
-
-[Athena / QuickSight Dashboards]
-
+![Architecture_Diagram](./architecture.png)
 
 ---
 
