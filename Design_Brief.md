@@ -61,14 +61,13 @@ If users have revoked consent, the pipeline will delete their data from raw data
 3. Keep audit logs of deletion actions to demonstrate compliance.
 
 ## Baseline vs. Improved Architecture
-## Architecture Comparison
 
 | Layer | Baseline Architecture (Naïve) | Chosen Architecture (Compliant & Cost-Constrained) |
 |--------|-------------------------------|----------------------------------------------------|
 | **1. Data Ingestion** | Single centralized S3 bucket (e.g., `global-health-data`) where all raw data (Canada, EU, Brazil) is uploaded. | Three **regional S3 buckets**: <br>• `s3://health-canada-raw/` (ca-central-1) <br>• `s3://health-eu-raw/` (eu-west-1) <br>• `s3://health-brazil-raw/` (sa-east-1). Each region ingests locally to preserve data residency. |
 | **2. ETL / Processing** | One AWS Glue job (in `us-east-1`) processes and converts all data to Parquet format. No compression or schema optimization applied — large storage footprint. | Separate **AWS Glue jobs per region** (1 DPU each), run sequentially via Step Functions to control costs and respect regional boundaries. Converts data to **partitioned Parquet** with **Snappy compression**, stored in `s3://health-<region>-processed/`. |
 | **3. Workflow Orchestration** | Minimal orchestration; manual or single Lambda trigger. | **AWS Step Functions** orchestrate the pipeline end-to-end (Lambda → Glue → aggregation). Includes **step-level retries**, **idempotent runs**, and clear failure states. |
-| **4. Aggregation / Analytics** | Central Redshift or Athena dataset containing global data. | **Federated Athena or Glue Data Catalog views** operate on **regional aggregates only** — no raw cross-border transfers. |
+| **4. Aggregation / Analytics** | Central Redshift or Athena dataset containing global data. | **Federated Athen** operate on **regional aggregates only** — no raw cross-border transfers. |
 | **5. Security / Privacy Controls** | Global IAM roles and a single KMS key. | Region-specific **KMS encryption keys**, least-privilege IAM policies, and **data-at-rest + in-transit encryption** per region. |
 | **6. Consent & Deletion Management** | Manual deletions or ad-hoc database updates. | Automated via **`DeletionRequestLog`** + Lambda cleanup job per region. Supports consent withdrawal and deletion SLAs (7–30 days depending on regulation). |
 | **7. Monitoring & Cost Control** | Only global CloudWatch metrics. | **CloudWatch dashboards per region** track p95 completion, Glue costs, and SLA compliance. **Billing alerts** ensure spend stays ≤ $500 / month. |
