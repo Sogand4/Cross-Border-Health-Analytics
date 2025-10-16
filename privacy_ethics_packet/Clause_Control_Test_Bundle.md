@@ -131,4 +131,58 @@ Protects: EU residents and cross-region users.
 Harm mitigated: Accidental cross-border data exposure or automatic uploads without user action.  
 Linked ledger row: “Apply privacy by design & default” (GDPR Art. 25).
 
+### (EU) Clause 4: Purpose Limitation – Further Processing Notification
+
+**Source:**  
+GDPR Article 13(3) – “Where the controller intends to further process the personal data for a purpose other than that for which the personal data were collected, the controller shall provide the data subject prior to that further processing with information on that other purpose and with any relevant further information.”
+
 ---
+
+#### Control
+
+| Control | Enforcement Point | Implementation Notes |
+|----------|------------------|----------------------|
+| Notify users via app or email before any secondary processing occurs. | Mobile App / Backend Notification Service | Notification includes purpose, legal basis, and contact info for data inquiries. |
+| Require explicit consent if secondary purpose is not covered under original consent. | Mobile App → API Gateway → Lambda | Lambda verifies user consent for new purpose; stores consent status in Cognito attributes. |
+| Log all secondary processing purposes and consent timestamps. | CloudWatch → S3 Audit Log | Maintain `SecondaryProcessingLog` per region for audit and compliance reporting. |
+
+---
+
+#### Test Exemplar
+
+```python
+def test_secondary_processing_requires_notice_and_consent():
+    """Verify that secondary processing only occurs after user notification and consent."""
+    
+    user = create_test_user()
+    
+    # 1. Attempt secondary processing without consent
+    resp = trigger_secondary_processing(user, purpose="research_analysis")
+    assert resp.status_code == 403, \
+        "Secondary processing occurred without notification/consent"
+    
+    # 2. Notify user and obtain consent
+    notify_user_of_new_purpose(user, purpose="research_analysis")
+    give_user_consent(user, purpose="research_analysis")
+    
+    # 3. Attempt processing again
+    resp = trigger_secondary_processing(user, purpose="research_analysis")
+    assert resp.status_code == 200, \
+        "Secondary processing blocked despite user consent"
+    
+    # 4. Check audit log
+    logs = load_secondary_processing_log(user)
+    assert logs[-1]["consent_granted"] is True, \
+        "Consent not properly recorded in audit log"
+```
+
+**Red-bar status:**  
+Fails initially because the system allows secondary processing of personal data without notifying the user or obtaining explicit consent. This exposes EU users to undisclosed data usage and violates GDPR Article 5(1)(b).
+
+**Plan to flip to green:**  
+Integrate a notification mechanism (app push/email) before any secondary processing. Enforce a Lambda check that validates user consent for the new purpose. Ensure all consent events are logged in `SecondaryProcessingLog`. Re-run pytest until all assertions pass, confirming that processing without prior notification/consent is blocked.
+
+**Ethics Ledger Entry:**  
+Protects: EU data subjects whose personal data may be reused for secondary purposes.  
+Harm mitigated: Unauthorized or undisclosed use of personal data for purposes other than originally collected.  
+Linked ledger row: “Notify users and obtain consent for secondary processing” (GDPR Art.13(3)).
