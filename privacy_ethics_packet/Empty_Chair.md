@@ -30,33 +30,32 @@ If Indigenous-tagged health data is copied to another country, it breaks the com
 
 ---
 
-## Empty Chair Perspective — Data Scientist Under Time Pressure  
+## Empty Chair Perspective — EU Patient (GDPR)
 
 **Scenario:**  
-An analyst working on nightly batch jobs wants to speed up model training and temporarily disables data-deletion jobs to avoid delays.  
-Old health data remains stored longer than allowed by policy.
+A developer schedules a nightly ETL job in AWS Glue that processes user data across regions.  
+They forget to filter out records for patients who requested deletion earlier in the day.
 
 **Stakeholder (Empty Chair):**  
-Stakeholder: The data scientist running the batch analytics workflow.  
-They are not thinking about legal retention limits; their focus is model accuracy and deadlines.
+Stakeholder: An EU patient who requested deletion of their personal health data.  
+They are not in the room when this decision happens, but GDPR Article 17 requires their personal data be deleted promptly.
 
 **Why It Matters:**  
-If retention limits are ignored, personal health data may remain in storage indefinitely, violating deletion clauses and inflating compliance risk.
+If the ETL job processes data that should have been deleted, the organization violates GDPR, risking legal penalties and eroding patient trust.
 
 ### Control
 | Control | Where It Happens | What It Does |
-|----------|------------------|--------------|
-| Lock deletion jobs to run automatically regardless of model schedule. | Step Functions / Orchestrator | Ensures data cleanup cannot be skipped manually. |
-| Add retention-limit alerts to dashboard. | CloudWatch / Monitoring | Warns the team if objects older than 7 days remain. |
-
+|----------|-----------------|--------------|
+| Filter ETL input by deletion requests. | AWS Glue Job Scripts | Ensures any patient data flagged for deletion is excluded from processing. |
+| Track deletion requests and ETL runs. | CloudWatch + DynamoDB / metadata logs | Confirms each request is honored before processing; raises alerts if patient data is found in ETL input. |
 
 ### Acceptance Test
-**Goal:** Confirm that old data is always deleted on schedule.  
+**Goal:** Make sure all patient deletion requests are honored before any ETL processing.
 
 **How to Check:**  
-- Attempt to pause or skip the deletion step; orchestrator should reject or reschedule it.  
-- Query S3 after 7 days and confirm no files older than the policy limit exist.  
+- Query logs to ensure records with deletion flags do not enter Glue transformations.  
+- Run automated checks comparing requested deletions vs processed data daily.
 
 **What Passing Looks Like:**  
-- Deletion job runs automatically after each batch.  
-- No retained data exceeds the allowed age threshold.  
+- No patient records that requested deletion are included in ETL outputs.  
+- Alerts remain clear, confirming compliance with GDPR deletion timelines.
