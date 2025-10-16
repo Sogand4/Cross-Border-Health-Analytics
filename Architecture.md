@@ -2,10 +2,10 @@
 
 ---
 
-Design Choice Explanations:
+# Design Choice Explanations:
 
 ### API Gateway
-- Exposes HTTPS `/batch-upload` endpoint for mobile app uploads of symptom logs.
+- Exposes HTTPS `/batch-upload` endpoint for mobile app uploads of patient logs.
 - Each request contains multiple entries (all logs from a user’s day).
 - Justification for batch uploads:
   - Greatly reduces the total number of API calls and Lambda invocations, improving throughput for the 2 TB nightly ingest. Helps keep cost low. (instead of sending requests everytime a user logs something throughout their day)

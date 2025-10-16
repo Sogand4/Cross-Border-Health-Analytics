@@ -138,49 +138,24 @@ The required configuration is **1 DPU per region** ($3 \text{ regions} \times 1 
 2.  **Total Monthly DPU-Hours (30 runs):**
     $$15 \text{ DPU-Hours/Run} \times 30 \text{ Runs/Month} = \mathbf{450 \text{ DPU-Hours/Month}}$$
 
-Based on a typical AWS Glue rate ($\approx \$0.44/\text{DPU-Hour}$), the estimated monthly cost is:
-$\$0.44/\text{DPU-Hour} \times 450 \text{ DPU-Hours} \approx \mathbf{\$198 \text{ per month}}$
-
 ### Estimated Monthly Costs
-Our estimate is ~$339/month, which meets our cost SLA.
+Our estimate is ~$440/month, which meets our cost SLA. Please reference [Architecture.md](Architecture.md) for a detailed cost breakdown.
 
-| Component | Assumptions | Estimated Monthly Cost | Notes |
-|-----------|-------------|-----------------------:|-------|
-| **S3 Storage (Standard)** | 2 TB total (~0.67 TB per region) | $47 | $0.023/GB × 2,048 GB; includes raw + processed data |
-| **S3 Requests** | 1M PUT/GET per month | $6 | PUT/POST/COPY ~ $0.005/1,000; GET ~ $0.0004/1,000 |
-| **AWS Lambda** | **3 Lambdas per region (9 total)**, 1,000 invocations per night, 512 MB memory, 2 s avg runtime | **~$75** | 3× more than baseline ($25 × 3); 3 regions × 3 Lambdas × 30 nights × 1,000 invocations × ~$0.00001667/GB-s |
-| **AWS Glue** | 3 regional jobs, nightly ETL, estimated $198/month | $198 | Adjusted for chosen DPU configuration and runtime; main cost driver |
-| **Step Functions** | 1 execution per region per night, 20 state transitions | ~$3 | 3 regions × 30 nights × 20 states × $0.025 per 1,000 state transitions |
-| **CloudWatch Monitoring** | Logs + metrics for Lambda & Glue | ~$10 | Estimate for 2 TB nightly logs; minimal cost with log retention |
-| **Total** |  | **≈ $339 / month** |
-
-### p95 Estimate
+### Meeting p95 SLA
 
 **Assumptions**:
-- Region raw size ≈ **667 GB** = **667,000 MB**.  
-- "Throughput" numbers are **end-to-end effective throughput** (read + compress + write) in **MB/s**; they reflect CPU + network + S3 latency combined.  
-- Compression ratio (for storage) is not used in throughput math — throughput is end-to-end bytes processed per second.  
 - Lambda cold-start (p50) ≈ **0.5 s**, p95 ≈ **2.0 s** is neglible
-- Retry latency already included in estimate
+- From calculations below, we use 3 lambdas per region to achieve 40 minute p95.
 
-From calculations below, we use 3 lambdas per region to achieve 40 minute p95.
 | Throughput per Lambda | Workers required (digit-by-digit) | Round up |
 |----------------------:|----------------------------------:|--------:|
 | 30 MB/s | workers = 667000 ÷ (30 × 2400) = 667000 ÷ 72,000 = 9.2639 | **10 workers** |
 | 60 MB/s | workers = 667000 ÷ (60 × 2400) = 667000 ÷ 144,000 = 4.6319 | **5 workers** |
 | 100 MB/s | workers = 667000 ÷ (100 × 2400) = 667000 ÷ 240,000 = 2.7792 | **3 workers** |
 
-- We have also previously shown that Glue jobs can finish in 3.5 hours
+- We have also previously shown that Glue jobs can finish in 3.5 hours using our target number of DPUs (1 per region)
 
-| Step | Stage | Stage p95 (minutes) | Cumulative minutes | Cumulative h : m |
-|------|--------|--------------------:|-------------------:|-----------------:|
-| 1 | Ingestion / Compression (Lambda) | 40 | 40 = 40 | 0:40 |
-| 2 | Validation & Standardization (Lambda) | 45 | 40 + 45 = 85 | 1:25 |
-| 3 | ETL / Parquet Conversion (Glue) — tuned (3.5h) | 210 | 85 + 210 = 295 | 4:55 |
-| 4 | Regional Aggregation — tuned | 40 | 295 + 40 = 335 | 5:35 |
-| 5 | Reporting & Dashboards | 25 | 335 + 25 = 360 | **6:00** |
-
-**Final p95:** 360 minutes = **6 hours total**
+Since retries should only be performed for small batches/per file basis, they should not add a significant amount of latency. Furthermore, there is ~1.8 hours of leeway should there be retries before meeting the 6 hour deadline.
 
 
 ## Cloud Services Justification
@@ -194,12 +169,3 @@ From calculations below, we use 3 lambdas per region to achieve 40 minute p95.
     - The execution graph shows workflow progress, success, failure and retries which helps the pipeline be more observable
 - We used Amazon S3 Standard for all raw and processed data due to the ability to enforce per-region buckets, encrpytion, and its cost effectiveness (~$47/month across all regions)for short-term use. Data is retrieved nightly, so Standard level avoids retrieval fees associated with IA or Glacier Tiers.
 - For monitoring, we chose CloudWatch which is useful for searching, filtering and specifying retention policies. It also integrates well with our other chosen services.
-
-
-### Kill Switch
-
-| Mechanism | Implementation (in AWS) | Trigger Condition |
-| :--- | :--- | :--- |
-| **Ingestion Kill Switch** | **Disable the API Gateway / HTTP API.** | Detection of unauthorized access or a systemic failure in the **Lambda Router** that could lead to cross-regional data leakage or storage of unencrypted PII. |
-| **Processing Kill Switch** | **Pause the AWS Step Functions scheduler (CloudWatch/EventBridge Rule).** | Systemic Data Quality Failure (e.g., Glue jobs repeatedly corrupting data or failing schema validation). Prevents cost overruns and pollution of the data lake. |
-| **Data Access Kill Switch** | **Deny all external IAM roles access to the `S3 Aggregated Zone`.** | Suspected security incident or need to immediately isolate the stored PHI/PII from analysts/tools. |
