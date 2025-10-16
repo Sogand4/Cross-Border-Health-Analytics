@@ -115,6 +115,8 @@ Here is a more detailed table outlining how SLAs are measured:
 | **Error Handling / Retry Success Rate** | ≥ 95% of transient errors resolved via Step Functions retries without manual intervention | Track retry attempts and failed file partitions | Ensures high pipeline reliability while respecting idempotency and cost constraints |
 | **Monitoring & Alerting** | Failures detected within 5 minutes | CloudWatch alarms, Step Functions execution status, SNS notifications | Enables quick intervention for permanent failures; supports SLA adherence |
 
+The following subsections check that the proposed architecture fits with the SLA requirements:
+
 ### Batch Window Math
 The required DPU sizing is based on the compressed volume the Glue job reads ($136.53 \text{ GB}$ per region), ensuring the 5-hour P95 SLA is met.
 
@@ -139,7 +141,7 @@ The required configuration is **1 DPU per region** ($3 \text{ regions} \times 1 
 Based on a typical AWS Glue rate ($\approx \$0.44/\text{DPU-Hour}$), the estimated monthly cost is:
 $\$0.44/\text{DPU-Hour} \times 450 \text{ DPU-Hours} \approx \mathbf{\$198 \text{ per month}}$
 
-### Estimated Monthly Costs (~$289/month -> Meets SLA)
+### Estimated Monthly Costs (~$289/month)
 To compute an upper bound, we assumed 5 hours of DPU operation time. Our estimate is ~$289/month, which meets our cost SLA.
 
 | Component | Assumptions | Estimated Monthly Cost | Notes |
@@ -152,7 +154,7 @@ To compute an upper bound, we assumed 5 hours of DPU operation time. Our estimat
 | **CloudWatch Monitoring** | Logs + metrics for Lambda & Glue | ~$10 | Estimate for 2 TB nightly logs; minimal cost with log retention |
 | **Total** |  | **≈ $289 / month** | Uunder $500 budget; leaves room for scaling or additional analytics |
 
-### p95 Estimate (5 h 15/night -> Meets SLA)
+### p95 Estimate (5 h 15/night)
 
 | Step | Stage | Stage p95 (minutes) | Cumulative minutes | Cumulative h : m |
 |------|-------|---------------------:|-------------------------------------:|------------------:|
