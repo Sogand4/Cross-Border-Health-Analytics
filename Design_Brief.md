@@ -50,6 +50,9 @@ Data ingestion starts at 00:00 every day, due by 06:00 (local time for both).
 
 If users have revoked consent, the pipeline will delete their data from raw dataset. We will also check if the cohort is small and recalculate any aggregate statistics as neede (e.g. treatment cohort for a rare disease). This will prevent re-identification.
 
+**Retention**
+- **Deletion jobs** triggered by Lambda must complete within **7 days (p95)** of user request, verified via CloudWatch metrics and acceptance tests.
+
 ### Deleting patient data
 1. Tag all data with **patient ID + consent**
 2. If a deletion request is received:
@@ -58,9 +61,22 @@ If users have revoked consent, the pipeline will delete their data from raw data
 3. Keep audit logs of deletion actions to demonstrate compliance.
 
 ## Baseline vs. Improved Architecture
-TODO
+## Architecture Comparison
 
-Mention data compression
+| Layer | Baseline Architecture (Naïve) | Chosen Architecture (Compliant & Cost-Constrained) |
+|--------|-------------------------------|----------------------------------------------------|
+| **1. Data Ingestion** | Single centralized S3 bucket (e.g., `global-health-data`) where all raw data (Canada, EU, Brazil) is uploaded. | Three **regional S3 buckets**: <br>• `s3://health-canada-raw/` (ca-central-1) <br>• `s3://health-eu-raw/` (eu-west-1) <br>• `s3://health-brazil-raw/` (sa-east-1). Each region ingests locally to preserve data residency. |
+| **2. ETL / Processing** | One AWS Glue job (in `us-east-1`) processes and converts all data to Parquet format. No compression or schema optimization applied — large storage footprint. | Separate **AWS Glue jobs per region** (1 DPU each), run sequentially via Step Functions to control costs and respect regional boundaries. Converts data to **partitioned Parquet** with **Snappy compression**, stored in `s3://health-<region>-processed/`. |
+| **3. Workflow Orchestration** | Minimal orchestration; manual or single Lambda trigger. | **AWS Step Functions** orchestrate the pipeline end-to-end (Lambda → Glue → aggregation). Includes **step-level retries**, **idempotent runs**, and clear failure states. |
+| **4. Aggregation / Analytics** | Central Redshift or Athena dataset containing global data. | **Federated Athena or Glue Data Catalog views** operate on **regional aggregates only** — no raw cross-border transfers. |
+| **5. Security / Privacy Controls** | Global IAM roles and a single KMS key. | Region-specific **KMS encryption keys**, least-privilege IAM policies, and **data-at-rest + in-transit encryption** per region. |
+| **6. Consent & Deletion Management** | Manual deletions or ad-hoc database updates. | Automated via **`DeletionRequestLog`** + Lambda cleanup job per region. Supports consent withdrawal and deletion SLAs (7–30 days depending on regulation). |
+| **7. Monitoring & Cost Control** | Only global CloudWatch metrics. | **CloudWatch dashboards per region** track p95 completion, Glue costs, and SLA compliance. **Billing alerts** ensure spend stays ≤ $500 / month. |
+| **8. Compliance Alignment** | Violates GDPR/LGPD/OCAP by moving personal data across regions. | Fully compliant with **GDPR Art. 44**, **LGPD Art. 33**, **PIPEDA (residency & consent)**, and **OCAP®** (Indigenous data sovereignty). |
+| **9. Performance Target** | Single job handling all data → longer runtimes. | Sequential per-region processing with optimized Glue jobs → **p95 < 7 hours** (fits 00:00 – 06:00 window). |
+| **10. Cost Efficiency** | Centralized processing with unpredictable cost scaling and larger S3 storage due to uncompressed files. | 3 Glue jobs × 1 DPU each; sequential schedule → **≈ $198/month Glue + $100 Lambda/Step Functions + $180 S3 storage = <$500/month total.** Parquet compression reduces S3 costs by ~60–70%. |
+
+---
 
 ## Failure/Retry Policy
 In order to ensure idempotency, each Lambda/Glue task to not depend on previous runs by writing to consisent S3 Key patterns (e.g. `/region/date/device_id.parquet`) and `upsert` is used to add data to analytics tables. Exceptions are thrown on a per file basis, so retries are scoped to that single file. 
@@ -122,9 +138,9 @@ The required configuration is **1 DPU per region** ($3 \text{ regions} \times 1 
     $$15 \text{ DPU-Hours/Run} \times 30 \text{ Runs/Month} = \mathbf{450 \text{ DPU-Hours/Month}}$$
 
 Based on a typical AWS Glue rate ($\approx \$0.44/\text{DPU-Hour}$), the estimated monthly cost is:
-$$\$0.44/\text{DPU-Hour} \times 450 \text{ DPU-Hours} \approx \mathbf{\$198 \text{ per month}}$$
+$\$0.44/\text{DPU-Hour} \times 450 \text{ DPU-Hours} \approx \mathbf{\$198 \text{ per month}}$
 
-### Estimated Monthly Costs (~$289/month)
+### Estimated Monthly Costs (~$289/month -> Meets SLA)
 To compute an upper bound, we assumed 5 hours of DPU operation time. Our estimate is ~$289/month, which meets our cost SLA.
 
 | Component | Assumptions | Estimated Monthly Cost | Notes |
@@ -137,7 +153,7 @@ To compute an upper bound, we assumed 5 hours of DPU operation time. Our estimat
 | **CloudWatch Monitoring** | Logs + metrics for Lambda & Glue | ~$10 | Estimate for 2 TB nightly logs; minimal cost with log retention |
 | **Total** |  | **≈ $289 / month** | Uunder $500 budget; leaves room for scaling or additional analytics |
 
-### p95 Estimate (5 h 15/night)
+### p95 Estimate (5 h 15/night -> Meets SLA)
 
 | Step | Stage | Stage p95 (minutes) | Cumulative minutes | Cumulative h : m |
 |------|-------|---------------------:|-------------------------------------:|------------------:|
@@ -165,20 +181,6 @@ To compute an upper bound, we assumed 5 hours of DPU operation time. Our estimat
     - The execution graph shows workflow progress, success, failure and retries which helps the pipeline be more observable
 - We used Amazon S3 Standard for all raw and processed data due to the ability to enforce per-region buckets, encrpytion, and its cost effectiveness (~$47/month across all regions)for short-term use. Data is retrieved nightly, so Standard level avoids retrieval fees associated with IA or Glacier Tiers.
 - For monitoring, we chose CloudWatch which is useful for searching, filtering and specifying retention policies. It also integrates well with our other chosen services.
-
-
-**Compliance & Retention**
-- **Deletion jobs** triggered by Lambda must complete within **7 days (p95)** of user request, verified via CloudWatch metrics and acceptance tests.
-- **Data residency:** no cross-region replication; each user’s data stays within its jurisdiction (`ca-central-1`, `eu-central-1`, or `sa-east-1`).
-- **Consent**: users must give explicit consent to provide metadata and telemetry.
-    - Our app provides an opt-in button in the sign up page to explicitly ask users for consent.
-    - Users are also given the option to opt-out at any time by navigating to the `settings` section of the app.
-
-**Regulatory Deadlines**
-- **Canada (PIPEDA):** Deletion or consent withdrawal requests are processed within 7 days, based on our internal SLA target that interprets PIPEDA’s requirement to act “promptly.” This ensures user requests are handled in a timely and measurable way, even though the regulation does not define an exact deadline.
-- **EU (GDPR Art. 12–17):** Data-subject requests (access, deletion, correction) completed within **30 days**; monitored through CloudWatch deletion metrics.  
-- **Brazil (LGPD Art. 18):** Data-subject deletion requests honored within **7 days**, logged to `DeletionRequestLog` for audit.  
-- All regions: nightly aggregation jobs must complete **before 06:00 local time** to ensure regulators could audit fresh, up-to-date datasets on request.
 
 
 ### Kill Switch
