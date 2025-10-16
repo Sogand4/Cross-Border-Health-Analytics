@@ -25,15 +25,11 @@ We designed a pipeline to ingest 2 TB of sensor and mobile health data from indi
 ## Batch Schedule
 Data ingestion starts at 00:00 every day, due by 06:00 (local time for both).
 
-| Time (UTC) | Stage | Description |
-|-------------|--------|-------------|
-| **00:00 – 00:30** | **Data Ingestion (All Regions)** | Each region ingests data in parallel:<br>• Canada – Wearables, RPM, and clinical metadata into `s3://health-canada-raw/`.<br>• EU – Data from EU endpoints with GDPR-compliant consent validation.<br>• Brazil – Data from Brazilian endpoints with LGPD consent checks. |
-| **00:30 – 01:00** | **Data Validation & Schema Normalization (All Regions)** | Regional Lambdas standardize data into Open mHealth / FHIR schema. Add jurisdiction and treatment metadata. Validate file completeness. |
-| **01:00 – 01:30** | **Pseudonymization & Consent Enforcement (All Regions)** | Apply salted hashes to patient/device IDs. Filter by consent flags and OCAP® permissions for Indigenous datasets. |
-| **01:30 – 02:30** | **Feature Extraction – Regional Compute (All Regions)** | Compute daily well-being metrics (e.g., resting HR, sleep efficiency, step counts, patient-reported scores). Store results in regional analytics tables. |
-| **02:30 – 03:30** | **Regional Aggregation (All Regions)** | Summarize metrics by treatment program and demographic group. Validate consistency and prepare aggregates for federated analytics. |
-| **03:30 – 05:30** | **Federated Analytics / Model Updates (Cross-Region)** | Combine **aggregated metrics or model weights** (not raw data) across regions using federated learning or secure aggregation. |
-| **05:30 – 06:00** | **Reporting & Dashboards (Global)** | Generate clinician and research dashboards. Publish high-level insights and performance reports to each jurisdiction. |
+| Time (UTC) | Stage | Description | Notes |
+|------------|-------|-------------|-------|
+| 00:00 – 00:40 | Data Ingestion, Standardization & Compression (Lambda) | Pull wearable, RPM, mHealth, and clinical metadata per region; compress and store in S3 raw zone. | 3 Lambdas per region run concurrently; includes cold start overhead. |
+| 00:40 – 04:55 | ETL / Parquet Conversion & Regional Aggregation (Glue) | Transform JSON → Parquet; compute weekly aggregates per user; aggregate by treatment program per region; run local sanity checks. | 3 regional Glue jobs run in parallel, each ~3.5 h. Feature extraction removed; aggregation included. |
+| 04:55 – 05:10 | Reporting & Dashboards | Generate clinician and research dashboards; push alerts or summaries. | Parallel per region. |
 
 ---
 
