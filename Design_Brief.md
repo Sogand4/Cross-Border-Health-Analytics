@@ -12,6 +12,7 @@ We designed a pipeline to ingest 2 TB of sensor and mobile health data from indi
 | Wearables | Fitbit, Apple Watch, Garmin | Heart rate, step count, sleep quality, stress level, activity energy | Identify changes in rest/activity patterns post-treatment; detect fatigue or improved mobility. |
 | Mobile Health Apps | Symptom diaries | Self-reported pain, mood, sleep, side effects | Correlate well-being with treatment plan. |
 | EHR / Clinical Records (linked subset) | Hospital EMRs or national digital health portals | Diagnosis codes | Determine treatment start/end points. |
+| RPM Devices | Various remote monitoring devices | Blood pressure, glucose, weight | Track clinical responses to treatment and monitor chronic conditions remotely. |
 
 ## Data Volume
 | Source Type | Typical Data | Size per User / Day | Users | Raw Volume |
