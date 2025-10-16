@@ -125,10 +125,10 @@ The required DPU sizing is based on the compressed volume the Glue job reads ($1
 | **Raw Data Per Region** ($V_{raw}$) | $\approx 682.67 \text{ GB}$ | $2,048 \text{ GB} / 3 \text{ regions}$ | Volume written by the Lambda Router. |
 | **Compressed Data Per Region** ($V_{comp}$) | $\approx 136.53 \text{ GB}$ | $682.67 \text{ GB} / 5$ | Volume Glue reads from S3 (assuming 5x compression). |
 | **Compressed Data in MB** ($V_{MB}$) | $139,809 \text{ MB}$ | $136.53 \text{ GB} \times 1,024 \text{ MB/GB}$ | |
-| **P95 Target Time** ($T$) | $18,000 \text{ s}$ | $5 \text{ hours} \times 3,600 \text{ s/hr}$ | Maximum time allowed for ETL (P95 SLA). |
-| **Required Sustained Throughput** ($R$) | **$7.77 \text{ MB/s}$** | $139,809 \text{ MB} / 18,000 \text{ s}$ | Required speed to meet 5-hour SLA per region. |
-| **Required vCPUs** ($C_{vCPU}$) | $\approx 2.59$ | $7.77 \text{ MB/s} / 3 \text{ MB/s/vCPU}$ | Based on $3 \text{ MB/s}$ per vCPU assumption. |
-| **Required DPUs Per Region** ($D_{req}$) | **1 DPU** | $\lceil 2.59 \text{ vCPUs} / 4 \text{ vCPUs/DPU} \rceil$ | **1 DPU is sufficient** as it provides 4 vCPUs. |
+| **P95 Target Time** ($T$) | $12,600 \text{ s}$ | $3.5 \text{ hours} \times 60 \text{ s/hr}$ | Maximum time allowed for ETL (P95 SLA). |
+| **Required Sustained Throughput** ($R$) | **$11.10 \text{ MB/s}$** | $139,809 \text{ MB} / 12,600 \text{ s}$ | Required speed to meet 3.5-hour SLA per region. |
+| **Required vCPUs** ($C_{vCPU}$) | $\approx 3.7$ | $11.10 \text{ MB/s} / 3 \text{ MB/s/vCPU}$ | Based on $3 \text{ MB/s}$ per vCPU assumption. |
+| **Required DPUs Per Region** ($D_{req}$) | **1 DPU** | $\lceil 3.7 \text{ vCPUs} / 4 \text{ vCPUs/DPU} \rceil$ | **1 DPU is sufficient** as it provides 4 vCPUs. |
 
 The required configuration is **1 DPU per region** ($3 \text{ regions} \times 1 \text{ DPU} = 3$ total concurrent DPUs).
 
@@ -141,35 +141,47 @@ The required configuration is **1 DPU per region** ($3 \text{ regions} \times 1 
 Based on a typical AWS Glue rate ($\approx \$0.44/\text{DPU-Hour}$), the estimated monthly cost is:
 $\$0.44/\text{DPU-Hour} \times 450 \text{ DPU-Hours} \approx \mathbf{\$198 \text{ per month}}$
 
-### Estimated Monthly Costs (~$289/month)
-To compute an upper bound, we assumed 5 hours of DPU operation time. Our estimate is ~$289/month, which meets our cost SLA.
+### Estimated Monthly Costs
+Our estimate is ~$339/month, which meets our cost SLA.
 
 | Component | Assumptions | Estimated Monthly Cost | Notes |
-|-----------|------------|----------------------|-------|
-| **S3 Storage (Standard)** | 2 TB total (~0.67 TB per region) | $47 | $0.023/GB × 2,048 GB; includes raw + processed data |
+|-----------|-------------|-----------------------:|-------|
+| **S3 Storage (Standard)** | 2 TB total (~0.67 TB per region) | $47 | $0.023/GB × 2,048 GB; includes raw + processed data |
 | **S3 Requests** | 1M PUT/GET per month | $6 | PUT/POST/COPY ~ $0.005/1,000; GET ~ $0.0004/1,000 |
-| **AWS Lambda** | 3 functions per region, 1,000 invocations per night, 512 MB memory, 2 s avg runtime | ~$25 | 3 regions × 3 functions × 30 nights × compute cost (~$0.00001667/GB-s) |
+| **AWS Lambda** | **3 Lambdas per region (9 total)**, 1,000 invocations per night, 512 MB memory, 2 s avg runtime | **~$75** | 3× more than baseline ($25 × 3); 3 regions × 3 Lambdas × 30 nights × 1,000 invocations × ~$0.00001667/GB-s |
 | **AWS Glue** | 3 regional jobs, nightly ETL, estimated $198/month | $198 | Adjusted for chosen DPU configuration and runtime; main cost driver |
 | **Step Functions** | 1 execution per region per night, 20 state transitions | ~$3 | 3 regions × 30 nights × 20 states × $0.025 per 1,000 state transitions |
-| **CloudWatch Monitoring** | Logs + metrics for Lambda & Glue | ~$10 | Estimate for 2 TB nightly logs; minimal cost with log retention |
-| **Total** |  | **≈ $289 / month** | Uunder $500 budget; leaves room for scaling or additional analytics |
+| **CloudWatch Monitoring** | Logs + metrics for Lambda & Glue | ~$10 | Estimate for 2 TB nightly logs; minimal cost with log retention |
+| **Total** |  | **≈ $339 / month** |
 
-### p95 Estimate (5 h 15/night)
+### p95 Estimate
+
+**Assumptions**:
+- Region raw size ≈ **667 GB** = **667,000 MB**.  
+- "Throughput" numbers are **end-to-end effective throughput** (read + compress + write) in **MB/s**; they reflect CPU + network + S3 latency combined.  
+- Compression ratio (for storage) is not used in throughput math — throughput is end-to-end bytes processed per second.  
+- Lambda cold-start (p50) ≈ **0.5 s**, p95 ≈ **2.0 s** is neglible
+- Retry latency already included in estimate
+
+From calculations below, we use 3 lambdas per region to achieve 40 minute p95.
+| Throughput per Lambda | Workers required (digit-by-digit) | Round up |
+|----------------------:|----------------------------------:|--------:|
+| 30 MB/s | workers = 667000 ÷ (30 × 2400) = 667000 ÷ 72,000 = 9.2639 | **10 workers** |
+| 60 MB/s | workers = 667000 ÷ (60 × 2400) = 667000 ÷ 144,000 = 4.6319 | **5 workers** |
+| 100 MB/s | workers = 667000 ÷ (100 × 2400) = 667000 ÷ 240,000 = 2.7792 | **3 workers** |
+
+- We have also previously shown that Glue jobs can finish in 3.5 hours
 
 | Step | Stage | Stage p95 (minutes) | Cumulative minutes | Cumulative h : m |
-|------|-------|---------------------:|-------------------------------------:|------------------:|
-| 1 | Ingestion (Lambda) | 40 | 40 = 40 | 0:40 |
+|------|--------|--------------------:|-------------------:|-----------------:|
+| 1 | Ingestion / Compression (Lambda) | 40 | 40 = 40 | 0:40 |
 | 2 | Validation & Standardization (Lambda) | 45 | 40 + 45 = 85 | 1:25 |
-| 3 | ETL / Parquet Conversion (Glue) — tuned | 120 | 85 + 120 = 205 | 3:25 |
-| 4 | Feature Extraction (Glue) — tuned | 45 | 205 + 45 = 250 | 4:10 |
-| 5 | Regional Aggregation — tuned | 40 | 250 + 40 = 290 | 4:50 |
-| 6 | Reporting & Dashboards | 25 | 290 + 25 = 315 | **5:15** |
+| 3 | ETL / Parquet Conversion (Glue) — tuned (3.5h) | 210 | 85 + 210 = 295 | 4:55 |
+| 4 | Regional Aggregation — tuned | 40 | 295 + 40 = 335 | 5:35 |
+| 5 | Reporting & Dashboards | 25 | 335 + 25 = 360 | **6:00** |
 
-**Final p95: 315 minutes = 5 hours 15 minutes.**
+**Final p95:** 360 minutes = **6 hours total**
 
-**Notes:**  
-- Assumes regions run in **parallel**
-- Retries included in estimate
 
 ## Cloud Services Justification
 - We selected AWS Glue Batch compute primarily because we do not need to pay for continuous compute. An EC2-based Spark cluster would have higher operational overhead and will require us to pay for it to run 24/7 when we only needed 6 hours of runtime nightly. Kinesis + Lambda/Glue Streaming would also require continuous compute costs, which does not work with our tight budget. Other reasons we picked Glue include:
