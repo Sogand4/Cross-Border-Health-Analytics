@@ -4,7 +4,7 @@
 
 - [Design Brief](Design_Brief.md)
 
-- [Architecture Diagram](Architecture.png)
+- [Architecture Diagram](architecture.png)
 
 - [Cost & Infrastructure Plan](Cost_And_Infrastructure.md)
     - [Architecture Details](Architecture.md)
