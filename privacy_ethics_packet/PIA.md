@@ -1,11 +1,11 @@
 # Privacy Impact Assessment (PIA) — Patient Symptom Data Ingestion
 
 ## 1. Overview
-**Purpose:** Collect, process, and analyze patient symptom data from mobile apps, wearables, and clinical records to generate insights on treatment response. 
+**Purpose:** Collect, process, and analyze patient symptom data from mobile apps, wearables, RPM devices, and clinical records to generate insights on treatment response.  
 **Scope:** Regional ingestion in Canada, EU, and Brazil; serverless architecture with S3, Lambda, Glue, Step Functions, Athena, and QuickSight.  
 
 **Data Processing Summary:**  
-- **Collection:** Mobile app uploads, wearables API, EHR/clinical records (linked subset).  
+- **Collection:** Mobile app uploads, wearables API, RPM device uploads, EHR/clinical records (linked subset).  
 - **Processing:** Validation, metadata enrichment, JSON → Parquet transformation, anonymization, aggregation.  
 - **Sharing:** Aggregated dashboards per jurisdiction; restricted access per role.  
 - **Retention:** Raw data TTL = 20 days; aggregated data retained for 2 years; automated deletion policies.
@@ -16,11 +16,12 @@
 
 | Field | Source | Purpose | Lawful Basis | Minimization | Retention | Access Roles |
 |-------|--------|--------|--------------|-------------|-----------|--------------|
-| `user_id` | Mobile App | Identify user for per-user aggregation | Consent / HIPAA-equivalent | Pseudonymized / hashed | 20 days (raw), 2 years (aggregated) | Data Engineer, Analyst |
-| `timestamp` | Mobile App / Wearable | Time-series alignment | Consent | Round to nearest minute/hour where possible | 20 days / 2 years | Data Engineer, Analyst |
+| `user_id` | Mobile App, Wearables, RPM, EHR subset | Identify user for per-user aggregation | Consent / HIPAA-equivalent | Pseudonymized / hashed | 20 days (raw), 2 years (aggregated) | Data Engineer, Analyst |
+| `timestamp` | Mobile App / Wearable / RPM | Time-series alignment | Consent | Rounded to nearest minute/hour | 20 days / 2 years | Data Engineer, Analyst |
 | `symptom` | Mobile App | Health monitoring | Consent | Only required fields collected | 20 days / 2 years | Data Engineer, Analyst |
 | `duration` | Mobile App | Symptom analysis | Consent | Rounded to nearest hour | 20 days / 2 years | Data Engineer, Analyst |
 | `heart_rate`, `sleep_quality`, `steps` | Wearables | Treatment response monitoring | Consent | Only relevant metrics collected | 20 days / 2 years | Data Engineer, Analyst |
+| `blood_pressure`, `glucose`, `weight` | RPM Devices | Vital sign monitoring | Consent | Only required metrics collected | 20 days / 2 years | Data Engineer, Analyst |
 | `diagnosis_codes` | EHR subset | Establish treatment periods | Consent / Legal Agreement | Only linked subset | 20 days / 2 years | Data Engineer, Analyst |
 
 ---
@@ -60,7 +61,7 @@
 
 ## 7. Transparency & Choice
 - **Communication Plan:** App and portal disclose what is collected, why, and retention period.  
-- **Opt-in / Opt-out:** Patients must consent to mobile app data collection; aggregated analytics opt-out supported for research dashboards.
+- **Opt-in / Opt-out:** Patients must consent to mobile app, wearable, and RPM data collection; aggregated analytics opt-out supported for research dashboards.
 
 ---
 
@@ -106,12 +107,7 @@
 | QuickSight Dashboard Access | QuickSight | User activity, audit, licensing | Low (role-based) | QuickSight Audit Logs | 1 year | Compliance, Product Owner | Role-based access only; aggregated results |
 | Error & Alert Notifications | SNS / CloudWatch | Incident response | None | CloudWatch / SNS | 30 days | DevOps, Compliance | Alerts on SLA breach, ETL failure, unusual access |
 
-**Key Notes / Practices:**  
-1. All telemetry data is collected **per region** to enforce jurisdictional compliance.  
-2. Personally identifiable information (PII) is **pseudonymized or hashed** before storage.  
-3. Retention policies align with privacy TTLs: 20 days for raw, 2 years for aggregates, and logs typically 90 days to 1 year.  
-4. Access is **role-based and least-privilege**; all accesses logged and auditable.  
-5. Telemetry data is **not used for analytics**, only for monitoring, compliance, and system reliability.  
+---
 
 ## Recourse & Remedy
 
